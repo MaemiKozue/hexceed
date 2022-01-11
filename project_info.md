@@ -11,6 +11,8 @@ Program
 - screenshot()
 - input(key/click)
 
+Classes: Input, Image
+
 
 # Data recognition
 Hexceed
@@ -21,6 +23,7 @@ Hexceed
 
 Info
 - pos, type (reveal)
+
 
 # Data
 Level
