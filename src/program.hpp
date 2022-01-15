@@ -17,6 +17,8 @@ public:
 
     Image screenshot() const;
     bool input(Input in) const;
+
+    void loop() const;
 };
 
 

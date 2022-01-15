@@ -17,8 +17,10 @@ int main(int argc, char const *argv[])
     cout << in << endl;
     cout << second << endl;
 
-    Program prog("hexceed.exe");
+    Program prog("hexceed");
     cout << prog.input(in) << endl;
+    // prog.screenshot();
+    prog.loop();
     Image im = prog.screenshot();
     return 0;
 }
