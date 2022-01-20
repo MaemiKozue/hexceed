@@ -98,50 +98,64 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
         //     return false;
         //     break;
         // }
+        case WM_DESTROY: {
+            PostQuitMessage(0);
+            return 0;
+            break;
+        }
         case WM_NCCREATE: {
             std::cout << "WM_NCCREATE" << std::endl;
             std::cout << "Setup" << std::endl;
             CREATESTRUCT *pCreate = reinterpret_cast<CREATESTRUCT*>(lParam);
             prog = reinterpret_cast<Program*>(pCreate->lpCreateParams);
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(prog));
-            return true;
+            return TRUE;
             break;
         }
-        default: {
-            std::cout << "default" << std::endl;
+        case WM_PAINT: {
+            std::cout << "Drawing" << std::endl;
             LONG_PTR pProg = GetWindowLongPtrW(hwnd, GWLP_USERDATA);
             if (pProg != NULL) {
                 prog = reinterpret_cast<Program*>(pProg);
                 prog->screenshot();
-                UpdateWindow(hwnd);
             }
             return DefWindowProcW(hwnd, uMsg, wParam, lParam);
             break;
         }
-        // default: {
-        //     return DefWindowProcW(hwnd, uMsg, wParam, lParam);
-        // }
+        default: {
+            return DefWindowProcW(hwnd, uMsg, wParam, lParam);
+            break;
+        }
     }
 }
 
 void Program::loop() const
 {
+    bool quit = false;
     MSG msg;
     BOOL rb;
-    std::cout << "preloop" << std::endl;
-    while ((rb = GetMessageW(&msg, NULL, 0, 0)) != 0)
+    clock_t t_prev = clock();
+    while (!quit)
     {
-        std::cout << "loop" << std::endl;
-        if (rb == -1) {
-            std::cerr << "Error while getting message" << std::endl;
-            return;
+        rb = PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE);
+        if (rb == 0) {
+            clock_t t_now = clock();
+            clock_t delta_time = t_now - t_prev;
+            if (delta_time > 1./120) {
+                InvalidateRect(window, NULL, TRUE);
+                t_prev = t_now;
+            }
         }
         else {
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
+
+            if (msg.message == WM_QUIT) {
+                std::cout << "Quitting" << std::endl;
+                quit = true;
+            }
         }
     }
-    std::cout << "outloop" << std::endl;
 }
 
 
@@ -156,7 +170,7 @@ Program::Program(std::string name) :
     cls.hInstance = instance;
     cls.lpszClassName = L"hexceed_solver";
     RegisterClassExW(&cls);
-    std::cout << "Creating window" << std::endl;
+
     HWND win = CreateWindowExW(
         WS_EX_OVERLAPPEDWINDOW, 
         L"hexceed_solver",
@@ -166,7 +180,7 @@ Program::Program(std::string name) :
         CW_USEDEFAULT, CW_USEDEFAULT, // dimensions
         NULL, NULL, instance, this
     );
-    std::cout << "End constructor" << std::endl;
+
     ShowWindow(win, SW_SHOW);
     window = win;
 }
@@ -190,26 +204,67 @@ Image Program::screenshot() const
         HDC dc = GetDC(hWndProgram);
         if (dc == NULL) {
             std::cerr << "Cannot get device context for " << this->name << std::endl;
-            return NULL;
+            return Image();
         }
 
         RECT rect;
         bool rc = GetClientRect(hWndProgram, &rect);
         if (!rc) {
             std::cerr << "Cannot get window dimensions" << std::endl;
-            return NULL;
+            return Image();
         }
         
         int width = rect.right - rect.left;
         int height = rect.bottom - rect.top;
-        // HDC cdc = CreateCompatibleDC(dc);
-        // HBITMAP hCaptureBitmap = CreateCompatibleBitmap(dc, width, height);
-        
         HWND win = window;
+        HDC cdc = CreateCompatibleDC(dc);
+        HBITMAP hCaptureBitmap = CreateCompatibleBitmap(dc, width, height);
+        HGDIOBJ default_bitmap = SelectObject(cdc, hCaptureBitmap);
+        BitBlt(cdc, 0, 0, width, height, dc, 0, 0, SRCCOPY);
+
         BitBlt(GetDC(win), 0, 0, width, height, dc, 0, 0, SRCCOPY);
+        ReleaseDC(win, dc);
         ReleaseDC(hWndProgram, dc);
+
+        BITMAPINFO bmi = {};
+        bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        BITMAPINFOHEADER bmi_header;
+        int rci;
+        rci = GetDIBits(cdc, hCaptureBitmap, 0, 0, NULL, &bmi, DIB_RGB_COLORS);
+
+        switch (rci)
+        {
+            case 0:
+            {
+                std::cerr << "Unsuccessful getting bits" << std::endl;
+                break;
+            }
+            case ERROR_INVALID_PARAMETER:
+            {
+                std::cerr << "Error: " << "ERROR_INVALID_PARAMETER" << std::endl;
+                break;
+            }        
+            default: 
+            {
+                std::cout << "Success getting bits: " << rci << std::endl;
+                break;
+            }
+        }
+        bmi.bmiHeader.biCompression = BI_RGB;
+        bmi.bmiHeader.biHeight = - bmi.bmiHeader.biHeight;
+        bmi_header = bmi.bmiHeader;
+        std::cout << "Size: " << bmi_header.biSizeImage << std::endl;
+        char *img = ((char*)malloc(bmi_header.biSizeImage));
+        rci = GetDIBits(cdc, hCaptureBitmap, 0, bmi.bmiHeader.biHeight, img, &bmi, DIB_RGB_COLORS);
+        std::cout << "rci: " << rci << std::endl;
+        SelectObject(cdc, default_bitmap);
+        DeleteObject(hCaptureBitmap);
+        DeleteDC(cdc);
+
+        size_t step = (width * bmi.bmiHeader.biBitCount + (sizeof(DWORD) * 8) - 1) / (sizeof(DWORD) * 8) * sizeof(DWORD);
+        return Image(img, width, height, step);
     }
-    return NULL;
+    return Image();
 }
 
 bool Program::input(Input in) const

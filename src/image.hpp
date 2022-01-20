@@ -6,8 +6,13 @@ class Image
 private:
     void *data;
 public:
-    Image(void *data);
+    int width, height;
+    size_t step;
+    Image();
+    Image(void *data, int width, int height, size_t step);
     ~Image();
+
+    void* get() const { return data; };
 };
 
 
