@@ -6,6 +6,9 @@
 
 #include <windows.h>
 
+#include <chrono>
+#include <thread>
+
 
 static std::wstring wstr(std::string s)
 {
@@ -255,10 +258,55 @@ cv::Mat Program::screenshot()
 }
 
 
+static bool win_send_input(std::string window_name, Input in)
+{
+    if (in.getType() == MOUSE && in.getButton() == MB_LEFT) {
+        std::wstring wname = wstr(window_name);
+        HWND hWindow = FindWindowExW(NULL, NULL, NULL, wname.c_str());
+        if (hWindow == NULL) {
+            std::cerr << "Cannot find program " << window_name << std::endl;
+            return false;
+        }
+        SetForegroundWindow(hWindow);
+        // // WPARAM wParam = MK_LBUTTON;
+        // WPARAM wParam = 0;
+        // LPARAM lParam = (in.getY() << 16) | (in.getX() & 0xFFFF);
+        // PostMessageW(hWindow, WM_MOUSEMOVE, wParam, lParam);
+        // PostMessageW(hWindow, WM_LBUTTONDOWN, wParam, lParam);
+        // // PostMessageW(hWindow, WM_LBUTTONUP, wParam, lParam);
+        // return true;
+        INPUT input = {};
+        input.type = INPUT_MOUSE;
+        input.mi = {};
+        input.mi.dx = (LONG) (((double) in.getX() / 1920) * 65535);
+        input.mi.dy = (LONG) (((double) in.getY() / 1080) * 65535);
+        input.mi.mouseData = 0;
+        input.mi.dwFlags = MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE;
+        input.mi.time = 0;
+        input.mi.dwExtraInfo = NULL;
+        int rc = 0;
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        rc += SendInput(1, &input, sizeof(INPUT));
+        // std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        input.mi.dwFlags = MOUSEEVENTF_LEFTDOWN | MOUSEEVENTF_ABSOLUTE;
+        rc += SendInput(1, &input, sizeof(INPUT));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        input.mi.dwFlags = MOUSEEVENTF_LEFTUP | MOUSEEVENTF_ABSOLUTE;
+        rc += SendInput(1, &input, sizeof(INPUT));
+
+        return rc >= 1;
+    }
+    else {
+        std::cerr << "Input not implemented: " << in << std::endl;
+        return false;
+    }
+}
+
+
 bool Program::input(Input in) const
 {
     std::cout << "Sending " << in << " to " << this->name << std::endl;
-    return false;
+    return win_send_input(this->name, in);
 }
 
 

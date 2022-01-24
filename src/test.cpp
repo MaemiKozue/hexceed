@@ -13,6 +13,16 @@
 using namespace std;
 using namespace cv;
 
+
+static void onMouse(int event, int x, int y, int , void *data)
+{
+    if (event == EVENT_LBUTTONDOWN) {
+        Program& prog = *reinterpret_cast<Program*>(data);
+        prog.input(Input(MB_LEFT, x, y));
+    }
+}
+
+
 int main(int argc, char const *argv[])
 {
     cout << "argc: " << argc << endl;
@@ -38,6 +48,10 @@ int main(int argc, char const *argv[])
     Program prog(window_name);
     cout << prog.input(in) << endl;
 
+    string window_title = "View";
+    namedWindow(window_title);
+    setMouseCallback(window_title, onMouse, &prog);
+
     try
     {
         int k;
@@ -45,7 +59,7 @@ int main(int argc, char const *argv[])
         do {
             Mat frame = prog.screenshot();
             if (!frame.empty()) {
-                imshow("View", frame);
+                imshow(window_title, frame);
                 k = waitKey(frame_delay);
                 quit = k == 'q';
             }
