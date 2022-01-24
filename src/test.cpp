@@ -1,14 +1,17 @@
 #include <iostream>
+#include <string>
 #include "input.hpp"
 #include "program.hpp"
 
 
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
+#include <opencv2/imgproc.hpp>
 
 #define TARGET_FPS 144
 
 using namespace std;
+using namespace cv;
 
 int main(int argc, char const *argv[])
 {
@@ -40,15 +43,14 @@ int main(int argc, char const *argv[])
         int k;
         bool quit = false;
         do {
-            Image ss = prog.screenshot();
-            if (ss.get() != NULL) {
-                cv::Mat frame(ss.height, ss.width, CV_8UC4, ss.get());
-                cv::imshow("View", frame);
-                k = cv::waitKey(frame_delay);
+            Mat frame = prog.screenshot();
+            if (!frame.empty()) {
+                imshow("View", frame);
+                k = waitKey(frame_delay);
                 quit = k == 'q';
             }
             else {
-                cv::waitKey(2000);
+                waitKey(2000);
             }
         } while (!quit);
     }
@@ -57,5 +59,5 @@ int main(int argc, char const *argv[])
         std::cerr << e.what() << std::endl;
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }

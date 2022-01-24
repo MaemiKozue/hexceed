@@ -2,7 +2,6 @@
 
 #include <vector>
 #include <string>
-#include <codecvt>
 #include <iostream>
 
 #include <windows.h>
@@ -10,10 +9,8 @@
 
 static std::wstring wstr(std::string s)
 {
-    // std::wstring_convert<std::codecvt<wchar_t, >> converter;
     std::wstring res = L"";
 
-    // res = converter.from_bytes(s);
     int len = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, NULL, 0);
     if (len <= 0) {
         std::cerr << "Error converting: '" << s << "'" << std::endl;
@@ -76,14 +73,14 @@ static void print_visible_windows(std::ostream &out)
 }
 
 
+// Assuming input from default camera
 Program::Program(std::string name) :
-    name(name)
+    name(name),
+    capture(0),
+    cap_method(CAPTURE_CAMERA)
 {
-}
-
-
-Program::~Program()
-{
+    this->capture.set(cv::CAP_PROP_FRAME_WIDTH,  1920);
+    this->capture.set(cv::CAP_PROP_FRAME_HEIGHT, 1080);
 }
 
 
@@ -166,15 +163,13 @@ static size_t bitmap_step (BITMAPINFO bmi)
 }
 
 
-Image Program::screenshot() const
+static Image gdi_capture(std::string name)
 {
-    // std::cout << "Taking a screenshot from " << this->name << std::endl;
-
     // Retrieve handle on window
-    std::wstring wsname = wstr(this->name);
+    std::wstring wsname = wstr(name);
     HWND hWndProgram = FindWindowExW(NULL, NULL, NULL, wsname.c_str());
     if (hWndProgram == NULL) {
-        std::cerr << "Cannot find window with name '" << this->name << "'" << std::endl;
+        std::cerr << "Cannot find window with name '" << name << "'" << std::endl;
         print_visible_windows(std::cout);
         return Image();
     }
@@ -182,7 +177,7 @@ Image Program::screenshot() const
     // Retrieve device context
     HDC dc = GetDC(hWndProgram);
     if (dc == NULL) {
-        std::cerr << "Cannot get device context for " << this->name << std::endl;
+        std::cerr << "Cannot get device context for " << name << std::endl;
         return Image();
     }
 
@@ -238,8 +233,36 @@ Image Program::screenshot() const
 }
 
 
+cv::Mat Program::screenshot()
+{
+    cv::Mat ss;
+
+    if (this->cap_method == CAPTURE_GDI) {
+        Image im;
+        im = gdi_capture(this->name);
+        if (im.get() != NULL) {
+            ss = cv::Mat(im.height, im.width, CV_8UC4, im.get());
+        }
+    }
+    else if (this->cap_method == CAPTURE_CAMERA) {
+        this->capture >> ss;
+    }
+    else {
+        std::cerr << "Capture not implemented" << std::endl;
+    }
+
+    return ss;
+}
+
+
 bool Program::input(Input in) const
 {
     std::cout << "Sending " << in << " to " << this->name << std::endl;
     return false;
+}
+
+
+void Program::set_method(capture_method method)
+{
+    this->cap_method = method;
 }
