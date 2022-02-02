@@ -21,3 +21,15 @@ target_compile_options(mytest PRIVATE
 find_package(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 target_link_libraries(mytest ${OpenCV_LIBS})
+
+
+add_executable(text-hex test_hexgrid.cpp)
+target_compile_options(text-hex PRIVATE
+  $<$<CXX_COMPILER_ID:MSVC>:/W4 /WX>
+  $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-Wall -Wextra -Wpedantic -Werror>
+)
+
+find_package(OpenCV REQUIRED)
+include_directories(${OpenCV_INCLUDE_DIRS})
+target_link_libraries(text-hex ${OpenCV_LIBS})
+
