@@ -9,6 +9,37 @@ using namespace std;
 using namespace cv;
 
 
+static int direction(int qa, int ra, int qb, int rb)
+{
+    int dir = -1;
+    int dq = qb - qa;
+    int dr = rb - ra;
+
+    if (dq * dq > 1 || dr * dr > 1 || dq == dr) {
+        dir = -1;
+    }
+    else if (dq ==  1) {
+        dir = dr == 0 ? 1 : 0;
+    }
+    else if (dq ==  0) {
+        dir = dr == 1 ? 2 : 5;
+    }
+    else if (dq == -1) {
+        dir = dr == 0 ? 4 : 3;
+    }
+    else {
+        // cerr << "Non standard direction (" << dq << ", " << dr << ")" << endl;
+    }
+
+    return dir;
+}
+
+static int direction(pair<int, int> a, pair<int, int> b)
+{
+    return direction(a.first, a.second, b.first, b.second);
+}
+
+
 /* --------- Cell --------- */
 
 template<typename T>
@@ -32,25 +63,13 @@ Hexgrid<T>::Cell::Cell()
 template<typename T>
 void Hexgrid<T>::Cell::link(Hexgrid<T>::Cell& other)
 {
-    int dq = other.q - this->q;
-    int dr = other.r - this->r;
-    int i = -1;
-
-    if      (dq ==  1) {
-        i = dr == 0 ? 1 : 0;
-    }
-    else if (dq ==  0) {
-        i = dr == 1 ? 2 : 5;
-    }
-    else if (dq == -1) {
-        i = dr == 0 ? 4 : 3;
-    }
-    else {
-        cerr << "Linking Cells that are not neighbors!" << endl;
+    int dir = direction(this->q, this->r, other.q, other.r);
+    // Error
+    if (dir < 0) {
         return;
     }
 
-    this->link(i, &other);
+    this->link(dir, &other);
 }
 
 
@@ -83,9 +102,10 @@ void Hexgrid<T>::Cell::unlink_all()
 }
 
 
-
-
 /* --------- Hexgrid --------- */
+
+
+/* Hexgrid Cells */
 
 vector<pair<int, int>> neighbors(int q, int r)
 {
@@ -195,6 +215,52 @@ void Hexgrid<T>::set(int q, int r, T& data)
 }
 
 
+/* Hexgrid Walls */
+
+// This makes sure coordinates of A is lexically lower than of B
+static void normalize(int& qa, int& ra, int& qb, int& rb)
+{
+    using std::swap;
+
+    if (qb > qa) {
+        swap(qa, qb);
+        swap(ra, rb);
+    }
+    else if (qa == qb) {
+        if (rb > ra) {
+            swap(ra, rb);
+        }
+    }
+}
+
+
+template<typename T>
+void Hexgrid<T>::add_wall(int qa, int ra, int qb, int rb)
+{
+    normalize(qa, ra, qb, rb);
+    this->walls.insert({{qa, ra}, {qb, rb}});
+}
+
+
+template<typename T>
+bool Hexgrid<T>::has_wall(int qa, int ra, int qb, int rb)
+{
+    normalize(qa, ra, qb, rb);
+    return this->walls.contains({{qa, ra}, {qb, rb}});
+}
+
+
+template<typename T>
+void Hexgrid<T>::remove_wall(int qa, int ra, int qb, int rb)
+{
+    normalize(qa, ra, qb, rb);
+    this->walls.erase({{qa, ra}, {qb, rb}});
+}
+
+
+/* Hexgrid drawing */
+
+
 static void draw_centered_text(Mat& out, string s, int x, int y, Scalar color, double scale, int font = FONT_HERSHEY_SIMPLEX)
 {
     Size size = getTextSize(s, font, scale, 1, nullptr);
@@ -280,11 +346,47 @@ static void draw_label(Mat& out, int x, int y, int q, int r, Scalar color, doubl
 }
 
 
+static void draw_wall(Mat& out, int x, int y, int dir, int size, Scalar color, int thickness)
+{
+    double vx, vy;
+    switch (dir % 3)
+    {
+    case 0: {
+        vx = sqrt(3) / 2.0;
+        vy = 0.5;
+        break;
+    }
+    case 1: {
+        vx = 0;
+        vy = 1;
+        break;
+    }
+    case 2: {
+        vx = sqrt(3) / 2.0;
+        vy = - 0.5;
+        break;
+    }
+
+    default:
+        vx = 0;
+        vy = 0;
+        break;
+    }
+
+
+    Point a = Point((int) (x - vx * size / 2.0), (int) (y - vy * size / 2.0));
+    Point b = Point((int) (x + vx * size / 2.0), (int) (y + vy * size / 2.0));
+    // circle(out, Point(x, y), 5, color);
+    line(out, a, b, color, thickness);
+}
+
+
 template<typename T>
 void Hexgrid<T>::draw(Mat& out, Scalar color, int size, int padding)
 {
     int l = size;
     int p = padding;
+    int wall_thickness = 3;
     if (l < 0 || p < 0) return;
     double sqrt_3 = sqrt(3);
     int ox = (int) (out.cols / 2.);
@@ -293,6 +395,7 @@ void Hexgrid<T>::draw(Mat& out, Scalar color, int size, int padding)
     int w2 = (int) (sqrt_3 * (l+p) / 2.);
     int h = (int) ((l+p) * 3. / 2.);
 
+    // Cell drawing
     for (auto& pr : this->grid) {
         auto& pos = pr.first;
         Cell& cell = pr.second;
@@ -308,6 +411,31 @@ void Hexgrid<T>::draw(Mat& out, Scalar color, int size, int padding)
         draw_data(out, x, y, cell.data, color, l/50.);
         draw_neighbors(out, x, y, cell, color, l);
         draw_label(out, x, y, q, r, color, 0.375*l/50.);
+    }
+
+    // Wall drawing
+    for (auto& wall : this->walls) {
+        auto& pa = wall.first;
+        auto& pb = wall.second;
+
+        int qa = pa.first;
+        int ra = pa.second;
+        int qb = pb.first;
+        int rb = pb.second;
+
+        int xa = ox + w * (qa + ra/2) + (ra%2 * w2);
+        int ya = oy + h * ra;
+        int xb = ox + w * (qb + rb/2) + (rb%2 * w2);
+        int yb = oy + h * rb;
+        int x = (xa + xb) / 2;
+        int y = (ya + yb) / 2;
+
+        // circle(out, Point(xa, ya), 2, Scalar(0, 255, 0), FILLED);
+        // circle(out, Point(xb, yb), 2, Scalar(0, 255, 0), FILLED);
+        // line(out, Point(xa, ya), Point(xb, yb), Scalar(0, 255, 0));
+
+        int dir = direction(pa, pb);
+        draw_wall(out, x, y, dir, l, Scalar(0, 0, 255), wall_thickness);
     }
 }
 

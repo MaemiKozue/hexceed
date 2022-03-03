@@ -70,13 +70,24 @@ int main(int argc, char const *argv[])
         grid.add(x, y, v);
     }
 
+    for (int i = 0; i < 6; i++) {
+        int x1 = static_cast<int>(round(normal(reng)));
+        int y1 = static_cast<int>(round(normal(reng)));
+        int x2 = static_cast<int>(round(normal(reng)));
+        int y2 = static_cast<int>(round(normal(reng)));
+        grid.add_wall(x1, y1, x2, y2);
+    }
+
     int w = 512;
     int h = 512;
     int k;
     int size = 50;
     int padding = 0;
     Mat bg(h, w, CV_8UC4, Scalar(255, 255, 255, 0));
-    while ((k = waitKey(10)) != 'q') {
+    bool quit = false;
+    bool restart = false;
+    while (!quit) {
+        k = waitKey(10);
         Mat grid_layer(h, w, CV_8UC4, Scalar(0, 0, 0, 255));
         Mat out(h, w, CV_8UC4);
 
@@ -93,6 +104,13 @@ int main(int argc, char const *argv[])
         else if (k == 'm') {
             padding--;
             if (padding < 0) padding = 0;
+        }
+        else if (k == 'q') {
+            quit = true;
+        }
+        else if (k == 'r') {
+            quit = true;
+            restart = true;
         }
 
         // draw_hexgrid(grid_layer, w, h, size, padding);
@@ -111,5 +129,10 @@ int main(int argc, char const *argv[])
         imshow("Hexgrid", out);
     }
 
-    return EXIT_SUCCESS;
+    if (restart) {
+        return main(argc, argv);
+    }
+    else {
+        return EXIT_SUCCESS;
+    }
 }
